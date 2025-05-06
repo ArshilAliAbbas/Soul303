@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 import SoulprintMainTab from '@/components/soulprint/SoulprintMainTab';
 import LegacyDataTab from '@/components/soulprint/LegacyDataTab';
-import { ConnectionsTabContent } from '@/components/soulprint/ConnectionsTab/ConnectionsTabContent';
+import ConnectionsTabContent from '@/components/soulprint/ConnectionsTab/ConnectionsTabContent';
 import SoulprintHeader from '@/components/soulprint/SoulprintHeader';
 import SoulprintTabs from '@/components/soulprint/SoulprintTabs';
 import SoulprintWeb3StatusBar from '@/components/soulprint/SoulprintWeb3StatusBar';

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import ProgressBar from './ProgressBar';
+import CustomProgressBar from './ProgressBar';
 import { Database, FileText, Lock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -32,7 +32,7 @@ const LegacyDataTab = () => {
                   <span>Import Progress</span>
                   <span className="text-neuro-500">40%</span>
                 </div>
-                <ProgressBar value={40} variant="neuro" />
+                <CustomProgressBar value={40} variant="neuro" />
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -64,7 +64,7 @@ const LegacyDataTab = () => {
                   <span>Security Level</span>
                   <span className="text-soul-500">Advanced</span>
                 </div>
-                <ProgressBar value={80} variant="soul" />
+                <CustomProgressBar value={80} variant="soul" />
               </div>
               
               <div className="grid grid-cols-1 gap-3">

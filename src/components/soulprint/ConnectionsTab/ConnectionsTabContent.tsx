@@ -22,3 +22,5 @@ export const ConnectionsTabContent = () => {
     </motion.div>
   );
 };
+
+export default ConnectionsTabContent;

@@ -8,7 +8,7 @@ import JournalEditorHeader from './JournalEditorHeader';
 import MoodSelector from './MoodSelector';
 import TagInput from './TagInput';
 import AIInsights from './AIInsights';
-import { ThumbsUp, Save } from 'lucide-react';
+import { ThumbsUp, Save, PenLine, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface JournalEditorProps {
@@ -24,6 +24,8 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
   const [showAI, setShowAI] = useState(false);
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   useEffect(() => {
@@ -34,13 +36,15 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
   useEffect(() => {
     if (selectedPrompt && content.trim() === '') {
       setContent(selectedPrompt + '\n\n');
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(
-          selectedPrompt.length + 2,
-          selectedPrompt.length + 2
-        );
-      }
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(
+            selectedPrompt.length + 2,
+            selectedPrompt.length + 2
+          );
+        }
+      }, 100);
     }
     
     const storedPrompt = localStorage.getItem('selected_prompt');
@@ -52,13 +56,15 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
       
       localStorage.removeItem('selected_prompt');
       
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(
-          storedPrompt.length + 2,
-          storedPrompt.length + 2
-        );
-      }
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(
+            storedPrompt.length + 2,
+            storedPrompt.length + 2
+          );
+        }
+      }, 100);
     }
     
     if (storedMood) {
@@ -72,7 +78,43 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
       setMood(moodMapping[storedMood as keyof typeof moodMapping] || storedMood);
       localStorage.removeItem('selected_mood');
     }
+    
+    // Auto-save draft recovery
+    const savedDraft = localStorage.getItem('journal_draft');
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        if (draft.title) setTitle(draft.title);
+        if (draft.content) setContent(draft.content);
+        if (draft.mood) setMood(draft.mood);
+        if (draft.tags) setTags(draft.tags);
+        
+        toast.info("Draft recovered", {
+          description: "Your previous unsaved work has been restored"
+        });
+      } catch (e) {
+        console.error("Error parsing saved draft:", e);
+      }
+    }
   }, [selectedPrompt, content]);
+  
+  // Auto-save draft periodically
+  useEffect(() => {
+    const autosaveInterval = setInterval(() => {
+      if (title.trim() || content.trim()) {
+        const draft = {
+          title,
+          content,
+          mood,
+          tags,
+          lastSaved: new Date().toISOString()
+        };
+        localStorage.setItem('journal_draft', JSON.stringify(draft));
+      }
+    }, 30000); // Auto-save every 30 seconds
+    
+    return () => clearInterval(autosaveInterval);
+  }, [title, content, mood, tags]);
 
   const requestAIAnalysis = () => {
     if (!content || content.length < 20) {
@@ -95,7 +137,7 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
     }, 2000);
   };
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title || !title.trim()) {
       toast.error("Please add a title to your journal entry");
       return;
@@ -106,30 +148,54 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
       return;
     }
     
-    const newEntry = {
-      id: Date.now().toString(),
-      title,
-      content,
-      mood,
-      tags,
-      date: new Date().toISOString(),
-      wordCount
-    };
+    setIsSaving(true);
     
-    const entries = JSON.parse(localStorage.getItem('journal_entries') || '[]');
-    entries.unshift(newEntry);
-    localStorage.setItem('journal_entries', JSON.stringify(entries));
-    
-    toast.success("Journal entry saved", {
-      description: "Your thoughts have been recorded"
-    });
-    
-    setTitle('');
-    setContent('');
-    setMood('');
-    setTags([]);
-    setShowAI(false);
-    setAiInsights(null);
+    try {
+      const newEntry = {
+        id: Date.now().toString(),
+        title,
+        content,
+        mood,
+        tags,
+        date: new Date().toISOString(),
+        wordCount
+      };
+      
+      // Get existing entries or initialize empty array
+      const existingEntries = JSON.parse(localStorage.getItem('journal_entries') || '[]');
+      
+      // Add new entry at the beginning
+      existingEntries.unshift(newEntry);
+      
+      // Save updated entries to localStorage
+      localStorage.setItem('journal_entries', JSON.stringify(existingEntries));
+      
+      // Clear the draft after successful save
+      localStorage.removeItem('journal_draft');
+      
+      toast.success("Journal entry saved successfully", {
+        description: "Your thoughts have been recorded"
+      });
+      
+      // Reset form
+      setTitle('');
+      setContent('');
+      setMood('');
+      setTags([]);
+      setShowAI(false);
+      setAiInsights(null);
+    } catch (error) {
+      console.error("Error saving journal entry:", error);
+      toast.error("Failed to save journal entry", {
+        description: "Please try again"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
   };
   
   return (
@@ -145,55 +211,94 @@ const JournalEditor = ({ selectedPrompt }: JournalEditorProps) => {
         requestAIAnalysis={requestAIAnalysis}
       />
       
-      <Card className="border border-gray-100 dark:border-gray-800 neumorph-card dark:neumorph-card-dark overflow-hidden">
-        <CardContent className="p-4">
-          <div className="mb-4">
-            <Textarea
-              ref={textareaRef}
-              placeholder="Write your thoughts here..."
-              className="min-h-[300px] resize-none border-none focus-visible:ring-0 p-0 shadow-none text-base"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-            />
-          </div>
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Card className="overflow-hidden border-0 bg-card shadow-xl relative">
+          <div className={`absolute inset-0 bg-gradient-to-br ${isFocused ? 'from-mindspace-500/5 to-neuro-500/5' : 'from-transparent to-transparent'} transition-all duration-700`} />
+          <div className={`absolute inset-0 border border-transparent ${isFocused ? 'border-mindspace-500/20' : ''} rounded-lg transition-all duration-500`} />
           
-          <div className="border-t border-border pt-4">
-            <div className="flex flex-col space-y-4">
-              <MoodSelector mood={mood} setMood={setMood} />
+          <CardContent className="p-4 relative z-10">
+            <div className="flex items-center text-muted-foreground text-sm mb-4">
+              <Clock className="h-4 w-4 mr-2" />
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </div>
+            
+            <div className="relative mb-4 group">
+              <div className="absolute -left-4 inset-y-0 w-1 bg-gradient-to-b from-mindspace-500 to-neuro-500 rounded opacity-0 group-focus-within:opacity-100 transition-opacity" />
               
-              <TagInput tags={tags} setTags={setTags} />
+              <Textarea
+                ref={textareaRef}
+                placeholder="Write your thoughts here..."
+                className="min-h-[300px] resize-none border-none focus-visible:ring-0 p-0 shadow-none text-base bg-transparent"
+                value={content}
+                onChange={handleContentChange}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                style={{
+                  background: 'transparent',
+                  lineHeight: '1.8',
+                }}
+              />
               
-              <div className="flex items-center justify-between pt-2">
-                <div className="text-sm text-muted-foreground">
-                  {wordCount} {wordCount === 1 ? 'word' : 'words'}
+              {!content && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30">
+                  <div className="flex flex-col items-center">
+                    <PenLine className="h-12 w-12 mb-2 text-mindspace-400" />
+                    <p className="text-sm">Start writing your thoughts...</p>
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAI(!showAI)}
-                    className="flex items-center gap-1"
-                    disabled={!content || content.length < 20}
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                    <span className="hidden sm:inline">Get</span> AI Insights
-                  </Button>
-                  
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={!content || !content.trim() || !title || !title.trim()}
-                    className="bg-gradient-to-r from-mindspace-500 to-neuro-600 hover:from-mindspace-600 hover:to-neuro-700"
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    Save Entry
-                  </Button>
-                </div>
+              )}
+            </div>
+            
+            <div className="border-t border-border pt-4">
+              <div className="flex flex-col space-y-4">
+                <MoodSelector mood={mood} setMood={setMood} />
+                
+                <TagInput tags={tags} setTags={setTags} />
+                
+                <motion.div 
+                  className="flex items-center justify-between pt-2"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <div className="text-sm text-muted-foreground">
+                    {wordCount} {wordCount === 1 ? 'word' : 'words'}
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAI(!showAI)}
+                      className="flex items-center gap-1 relative overflow-hidden group"
+                      disabled={!content || content.length < 20}
+                    >
+                      <span className="absolute inset-0 bg-gradient-to-r from-mindspace-500/20 to-neuro-500/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ThumbsUp className="h-4 w-4" />
+                      <span className="hidden sm:inline relative z-10">Get</span>
+                      <span className="relative z-10">AI Insights</span>
+                    </Button>
+                    
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={!content || !content.trim() || !title || !title.trim() || isSaving}
+                      className="relative overflow-hidden group"
+                    >
+                      <span className="absolute inset-0 bg-gradient-to-r from-mindspace-600 via-neuro-600 to-soul-600 opacity-100 group-hover:opacity-90 transition-opacity" />
+                      <Save className="h-4 w-4 mr-1 relative z-10" />
+                      <span className="relative z-10">{isSaving ? 'Saving...' : 'Save Entry'}</span>
+                    </Button>
+                  </div>
+                </motion.div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </motion.div>
       
       {showAI && content && content.length > 20 && (
         <motion.div
